@@ -1,0 +1,41 @@
+# Ghost Sandbox — DRM Debug Rules
+# Preset for tracing and debugging DRM/signature checks.
+# All certificate and trust verification functions are traced with full parameter decode.
+
+name = "DRM Debug"
+
+[[rules]]
+hook_name = "WinVerifyTrust"
+action = "trace"
+value = ""
+active = true
+
+[[rules]]
+hook_name = "CertVerifyCertificateChainPolicy"
+action = "trace"
+value = ""
+active = true
+
+[[rules]]
+hook_name = "CertFindCertificateInStore"
+action = "trace"
+value = ""
+active = true
+
+[[rules]]
+hook_name = "CertGetCertificateChain"
+action = "trace"
+value = ""
+active = true
+
+[[rules]]
+hook_name = "LoadLibraryW"
+action = "trace"
+value = ""
+active = true
+
+[[rules]]
+hook_name = "GetProcAddress"
+action = "trace"
+value = ""
+active = true

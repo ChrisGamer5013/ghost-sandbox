@@ -1,0 +1,10 @@
+pub mod dashboard;
+pub mod trace_viewer;
+pub mod drm_view;
+pub mod sandbox_view;
+pub mod malware_view;
+pub mod integrations_view;
+pub mod hardware_profile;
+pub mod memory_editor;
+pub mod modules;
+pub mod rules;

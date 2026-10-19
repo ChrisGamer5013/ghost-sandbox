@@ -1,0 +1,149 @@
+# Ghost Sandbox — Default Hardware Profile
+# Minimal profile with sensible defaults.
+
+[identity]
+computer_name = "WORKSTATION-7X"
+user_name = "Developer"
+machine_guid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+volume_serial = "1234-ABCD"
+windows_product_id = "00330-80000-00000-AA123"
+
+[cpu]
+manufacturer = "GenuineIntel"
+brand_string = "Intel(R) Core(TM) i9-14900K"
+family = 6
+model = 183
+stepping = 1
+cores_physical = 24
+cores_logical = 32
+base_clock_mhz = 3200
+max_clock_mhz = 6000
+l1_cache_kb = 2048
+l2_cache_kb = 32768
+l3_cache_kb = 36864
+socket = "LGA1700"
+architecture = "x86_64"
+
+[cpu.features]
+SSE = true
+SSE2 = true
+SSE3 = true
+SSSE3 = true
+SSE4_1 = true
+SSE4_2 = true
+AVX = true
+AVX2 = true
+AVX512F = false
+AVX512BW = false
+AVX512VL = false
+FMA = true
+AES_NI = true
+POPCNT = true
+RDRAND = true
+RDSEED = true
+BMI1 = true
+BMI2 = true
+ADX = true
+SHA = true
+CLMUL = true
+F16C = true
+MOVBE = true
+LZCNT = true
+ABM = true
+TSX = false
+SGX = false
+VAES = true
+VPCLMULQDQ = true
+AVX_VNNI = true
+
+[gpu]
+name = "NVIDIA GeForce RTX 4090"
+vendor = "NVIDIA"
+vendor_id = 0x10DE
+device_id = 0x2684
+subsystem_id = 0x16F11043
+revision = 0xA1
+driver_version = "560.94"
+vram_mb = 24576
+shared_memory_mb = 16384
+pcie_gen = 4
+pcie_width = 16
+
+[gpu.vulkan]
+api_version = "1.3.280"
+driver_id = 4
+driver_version_raw = 0x22800000
+device_type = 2
+
+[gpu.directx]
+feature_level = "12_2"
+shader_model = "6.7"
+ray_tracing_tier = "1_1"
+variable_rate_shading_tier = 2
+mesh_shader_tier = 1
+
+[motherboard]
+manufacturer = "ASUS"
+product = "ROG MAXIMUS Z790 HERO"
+serial = "MB-123456789"
+version = "Rev 1.xx"
+bios_vendor = "American Megatrends Inc."
+bios_version = "2403"
+bios_date = "04/15/2024"
+bios_mode = "UEFI"
+secure_boot = true
+
+[[storage.drives]]
+model = "Samsung SSD 990 PRO 2TB"
+serial = "S6XNNG0W123456"
+firmware = "4B2QJXD7"
+type = "NVMe"
+interface = "PCIe Gen4 x4"
+capacity_gb = 2000
+rpm = 0
+smart_temperature_c = 38
+
+[[network.adapters]]
+name = "Intel(R) Ethernet Controller I226-V"
+mac = "A8:B1:C2:D3:E4:F5"
+vendor_id = 0x8086
+device_id = 0x125C
+speed_mbps = 2500
+ipv4 = "192.168.1.100"
+
+[memory]
+total_gb = 64
+speed_mhz = 5600
+type = "DDR5"
+channels = 2
+dimm_count = 2
+manufacturer = "G.Skill"
+part_number = "F5-5600J3636C16GX2-TZ5NR"
+ecc = false
+
+[[pcie.devices]]
+bus = 0
+device = 2
+function = 0
+vendor_id = 0x10DE
+device_id = 0x2684
+class_code = 0x030000
+link_speed = "16.0 GT/s"
+link_width = "x16"
+bar0_size_mb = 256
+
+[[monitor.displays]]
+name = "ASUS ROG Swift PG27AQN"
+manufacturer = "AUS"
+serial = "M1LMQS123456"
+resolution_x = 2560
+resolution_y = 1440
+refresh_rate_hz = 360
+hdr = true
+color_depth = 10
+connector = "DisplayPort 1.4"
+
+[tpm]
+present = true
+version = "2.0"
+manufacturer = "IFX"

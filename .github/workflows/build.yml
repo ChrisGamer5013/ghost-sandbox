@@ -1,0 +1,126 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-x64:
+    name: Windows x64 — build, test, package
+    runs-on: windows-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write      # attach assets when a v* tag is pushed
+      id-token: write      # artifact attestations (OIDC)
+      attestations: write  # artifact attestations
+    env:
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust (stable, MSVC)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      # The e2e suites run the target\debug\ghost.exe + debug shim, so both
+      # profiles are built: debug for the tests, release for the artifact.
+      - name: Build host — debug (for the test suites)
+        run: cargo build
+
+      - name: Build host — release (GUI, CLI, ghost_lab)
+        run: cargo build --release
+
+      - name: Build native shim + fixtures (MSVC)
+        run: .\target\release\ghost_lab.exe build all
+
+      - name: Selftest (59 checks)
+        run: .\target\release\ghost_lab.exe selftest
+
+      # The GUI suites (drm / sandbox / malware-gui) are local-only; the
+      # CLI, hardware and malware suites cover the instrumented engine.
+      - name: End-to-end — CLI, hardware, malware
+        run: |
+          .\target\release\ghost_lab.exe e2e cli
+          .\target\release\ghost_lab.exe e2e hw
+          .\target\release\ghost_lab.exe e2e malware
+
+      - name: Package release
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $dist = "dist"
+          New-Item -ItemType Directory -Force $dist | Out-Null
+          $artifacts = @(
+            @("target\release\ghost_sandbox.exe", "ghost_sandbox.exe"),
+            @("target\release\ghost.exe",         "ghost.exe"),
+            @("target\release\ghost_lab.exe",     "ghost_lab.exe"),
+            @("target\release\sandbox_shim.dll",  "sandbox_shim.dll"),
+            @("sandbox_shim.dll",                 "sandbox_shim.dll"),
+            @("target\shimtest\ghost_host.exe",   "ghost_host.exe")
+          )
+          $copied = @{}
+          foreach ($pair in $artifacts) {
+            $src = $pair[0]; $name = $pair[1]
+            if (-not $copied.ContainsKey($name) -and (Test-Path $src)) {
+              Copy-Item $src (Join-Path $dist $name)
+              $copied[$name] = $true
+            }
+          }
+          Copy-Item README.md, AGENTS.md, LICENSE $dist
+          $files = Get-ChildItem $dist -File | Where-Object { $_.Extension -ne ".zip" -and $_.Name -ne "SHA256SUMS.txt" }
+          Compress-Archive -Path $files.FullName -DestinationPath "$dist\ghost-sandbox-windows-x64.zip" -Force
+          $hash = (Get-FileHash "$dist\ghost-sandbox-windows-x64.zip" -Algorithm SHA256).Hash.ToLower()
+          "$hash  ghost-sandbox-windows-x64.zip" | Set-Content "$dist\SHA256SUMS.txt"
+          Get-ChildItem $dist | Select-Object Name, Length
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ghost-sandbox-windows-x64
+          path: |
+            dist/ghost-sandbox-windows-x64.zip
+            dist/SHA256SUMS.txt
+
+      - name: Attest build provenance
+        if: github.event_name != 'pull_request' && github.event.repository.visibility == 'public'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/ghost-sandbox-windows-x64.zip
+
+      - name: Attestation skipped (private repository)
+        if: github.event_name != 'pull_request' && github.event.repository.visibility != 'public'
+        shell: bash
+        run: echo "Artifact attestations require a public repository (or GitHub Enterprise Cloud)."
+
+      - name: Publish GitHub release (v* tags)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" `
+            "dist/ghost-sandbox-windows-x64.zip" `
+            "dist/SHA256SUMS.txt" `
+            --title "Ghost Sandbox ${{ github.ref_name }}" `
+            --generate-notes

@@ -1,0 +1,16 @@
+# Ghost Sandbox — Default Rules
+# Minimal instrumentation, no overrides.
+
+name = "Default"
+
+[[rules]]
+hook_name = "LoadLibraryW"
+action = "trace"
+value = ""
+active = true
+
+[[rules]]
+hook_name = "GetProcAddress"
+action = "trace"
+value = ""
+active = true

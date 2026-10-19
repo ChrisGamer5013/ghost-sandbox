@@ -1,0 +1,45 @@
+# ── Build outputs — never commit ─────────────────────────────────────────
+# Cargo's build directory is ignored wholesale, except the hand-written native
+# fixture sources that ghost_lab compiles from target\drmtest and
+# target\shimtest. Everything else there is generated: exes, objs, logs,
+# reports, screenshots, pipe captures and shadow-store artifacts.
+/target/*
+!/target/drmtest/
+/target/drmtest/*
+!/target/drmtest/*.cpp
+!/target/shimtest/
+/target/shimtest/*
+!/target/shimtest/*.cpp
+
+# Deployed shim / native build artifacts at the project root
+/sandbox_shim.dll
+/sandbox_shim.dll.old
+/sandbox_shim.dll.pre-drm
+/sandbox_shim.obj
+/ghost_host.exe
+
+# Native compiler outputs anywhere
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.exe
+*.dll
+
+# Logs, captures and generated reports
+*.log
+*.pid
+*.bin
+*.jsonl
+
+# Local-only files (never push)
+/Ghost Sandbox.md
+*.local
+Thumbs.db
+desktop.ini
+
+# Editor / OS leftovers
+.vscode/
+.idea/
+.DS_Store
