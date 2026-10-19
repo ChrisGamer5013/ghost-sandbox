@@ -3,9 +3,13 @@ name: Build
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version override (e.g. 1.5.2). Empty = auto-bump minor by 0.1."
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -19,8 +23,11 @@ jobs:
     name: Windows x64 — build, test, package
     runs-on: windows-latest
     timeout-minutes: 90
+    # The release step pushes a version-bump commit marked [skip ci]; never
+    # build that commit again (also prevents any bump loop).
+    if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip ci]')
     permissions:
-      contents: write      # attach assets when a v* tag is pushed
+      contents: write      # push the version bump and publish the release
       id-token: write      # artifact attestations (OIDC)
       attestations: write  # artifact attestations
     env:
@@ -29,6 +36,66 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # tags are needed for the auto-version calculation
+
+      # Auto-versioning: the version lives in the VERSION file (CI keeps
+      # Cargo.toml in sync with it). A push to main bumps the minor version
+      # by 0.1 (1.0.0 -> 1.1.0 -> 1.2.0 ...) and publishes a tagged release.
+      # To choose a version explicitly, hand-edit VERSION (or the `version`
+      # field in Cargo.toml), or run the workflow with the `version` input.
+      - name: Resolve version
+        id: ver
+        if: github.event_name != 'pull_request'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $override = "${{ inputs.version }}".Trim()
+          $current = if (Test-Path VERSION) {
+            (Get-Content VERSION -Raw).Trim()
+          } else {
+            (
+              Select-String -Path Cargo.toml -Pattern '^version\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)"' |
+              Select-Object -First 1
+            ).Matches[0].Groups[1].Value
+          }
+          if ($current -notmatch '^\d+\.\d+\.\d+$') {
+            throw "VERSION must contain a bare x.y.z version, got '$current'"
+          }
+          $manifest = (
+            Select-String -Path Cargo.toml -Pattern '^version\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)"' |
+            Select-Object -First 1
+          ).Matches[0].Groups[1].Value
+          $tags = @(git tag --list 'v*' |
+            ForEach-Object { $_.Substring(1) } |
+            Where-Object { $_ -match '^\d+\.\d+\.\d+$' } |
+            Sort-Object { [version]$_ })
+          $latest = if ($tags.Count -gt 0) { $tags[-1] } else { "" }
+          if ($override) {
+            $next = $override                                  # explicit dispatch input
+          } elseif ($latest -and $current -ne $latest) {
+            $next = $current                                   # hand-edited VERSION file
+          } elseif ($latest -and $manifest -ne $latest) {
+            $next = $manifest                                  # hand-edited Cargo.toml
+          } elseif ($latest) {
+            $v = [version]$latest
+            $next = "{0}.{1}.0" -f $v.Major, ($v.Minor + 1)    # auto-bump minor by 0.1
+          } else {
+            $next = $current                                   # first release
+          }
+          if (-not (Test-Path VERSION) -or $current -ne $next) {
+            # WriteAllText keeps LF endings (Set-Content would write CRLF).
+            [IO.File]::WriteAllText("VERSION", "$next`n")
+          }
+          if ($manifest -ne $next) {
+            $raw = [IO.File]::ReadAllText("Cargo.toml")
+            $m = [regex]::Match($raw, '(?m)^version\s*=\s*"[^"]+"')
+            if (-not $m.Success) { throw "no version line in Cargo.toml" }
+            $patched = $raw.Substring(0, $m.Index) + ('version = "' + $next + '"') + $raw.Substring($m.Index + $m.Length)
+            [IO.File]::WriteAllText("Cargo.toml", $patched)
+          }
+          "next=$next" >> $env:GITHUB_OUTPUT
+          Write-Host "release version: $next (VERSION $current, manifest $manifest, latest tag v$latest)"
 
       - name: Install Rust (stable, MSVC)
         uses: dtolnay/rust-toolchain@stable
@@ -142,14 +209,40 @@ jobs:
         shell: bash
         run: echo "Artifact attestations require a public repository (or GitHub Enterprise Cloud)."
 
-      - name: Publish GitHub release (v* tags)
-        if: startsWith(github.ref, 'refs/tags/v')
+      # Commit the version bump (when there is one), then publish the tagged
+      # release with the attested artifact. `[skip ci]` keeps the bump
+      # commit from triggering another run. Reruns are safe: the release is
+      # updated in place if it already exists.
+      - name: Publish GitHub release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          NEXT: ${{ steps.ver.outputs.next }}
         run: |
-          gh release create "${{ github.ref_name }}" `
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add VERSION Cargo.toml Cargo.lock
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "chore(release): v$env:NEXT [skip ci]"
+            if ($LASTEXITCODE -ne 0) { throw "version bump commit failed" }
+            git push origin "HEAD:${{ github.ref_name }}"
+            if ($LASTEXITCODE -ne 0) { throw "version bump push failed" }
+          }
+          $sha = git rev-parse HEAD
+          gh release create "v$env:NEXT" `
             "dist/ghost-sandbox-windows-x64.zip" `
             "dist/SHA256SUMS.txt" `
-            --title "Ghost Sandbox ${{ github.ref_name }}" `
+            --target $sha `
+            --title "Ghost Sandbox v$env:NEXT" `
             --generate-notes
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "release v$env:NEXT already exists; updating assets"
+            gh release upload "v$env:NEXT" `
+              "dist/ghost-sandbox-windows-x64.zip" `
+              "dist/SHA256SUMS.txt" `
+              --clobber
+            if ($LASTEXITCODE -ne 0) { throw "release asset update failed" }
+          }
+          Write-Host "published release v$env:NEXT at $sha"

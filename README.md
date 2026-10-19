@@ -189,8 +189,14 @@ debug + release host build, native shim/fixtures, `selftest`, the
 CLI/hardware/malware e2e suites, then a release zip. The hardware suite runs
 headless on CI (through `ghost run`, no window). On public pushes the zip
 receives a build-provenance attestation
-(`gh attestation verify ghost-sandbox-windows-x64.zip --repo ChrisGamer5013/ghost-sandbox`),
-and `v*` tags publish it as a GitHub release.
+(`gh attestation verify ghost-sandbox-windows-x64.zip --repo ChrisGamer5013/ghost-sandbox`).
+
+Every push to `main` also publishes a release: the version in the root
+`VERSION` file (mirrored into `Cargo.toml`) is bumped by 0.1
+(1.0.0 → 1.1.0 → 1.2.0 …), committed as `chore(release): vX.Y.Z [skip ci]`,
+tagged `vX.Y.Z`, and released with the zip + `SHA256SUMS.txt`. To choose a
+number yourself, edit `VERSION` (a hand-edited `Cargo.toml` version or a
+manual workflow run with the `version` input works too).
 
 ---
 
@@ -545,6 +551,7 @@ ghost_lab e2e malware-gui   # the same through the GUI
 ghost_sandbox/
 ├── Cargo.toml                  # Rust manifest
 ├── Cargo.lock                  # Locked dependency set
+├── VERSION                     # Release version (CI bumps it, syncs Cargo.toml)
 ├── build.rs                    # Copies shim + host next to the binaries
 ├── .github/workflows/build.yml # CI: build, tests, attested release artifacts
 ├── .gitignore                  # Build outputs / local-only files

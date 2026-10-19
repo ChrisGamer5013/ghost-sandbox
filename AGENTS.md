@@ -248,10 +248,17 @@ README.md        features, coverage matrix, limitations, licence, disclaimer
 - GitHub Actions (`.github/workflows/build.yml`, `windows-latest`) builds
   debug + release, runs `selftest` and `e2e cli|hw|malware`, packages the
   release zip, attests build provenance on public pushes, and publishes a
-  GitHub release for `v*` tags. The GUI suites stay local-only; CI sets
+  GitHub release. The GUI suites stay local-only; CI sets
   `GHOST_E2E_HEADLESS=1` so the hardware suite drives the profile/shim path
   through `ghost run` instead of a window. Failure logs are uploaded as the
   `test-logs` artifact.
+- **Versioning**: the version lives in the root `VERSION` file; CI keeps
+  `Cargo.toml` (and `Cargo.lock`) in sync with it. Every push to `main`
+  bumps the minor version by 0.1 (1.0.0 -> 1.1.0 -> 1.2.0 ...), commits the
+  bump as `chore(release): vX.Y.Z [skip ci]`, tags `vX.Y.Z`, and publishes
+  the release with the attested zip. To pick the number yourself, hand-edit
+  `VERSION` (or the `version` field in `Cargo.toml`), or run the workflow
+  with the `version` input.
 - Shim diagnostics: `%TEMP%\ghost_sandbox_shim.log`.
 
 ## Automation / test environment variables
