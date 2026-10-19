@@ -76,7 +76,10 @@ jobs:
           path: |
             target/drmtest/*.log
             target/drmtest/*.txt
+            target/drmtest/*.json
+            target/drmtest/*.jsonl
             ${{ runner.temp }}/ghost_sandbox_shim.log
+            C:/Users/*/AppData/Local/Temp/ghost_sandbox_shim.log
           if-no-files-found: ignore
 
       - name: Package release
