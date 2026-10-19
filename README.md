@@ -186,7 +186,8 @@ ghost_lab deploy              # copy the shim next to the binaries
 The same build runs in GitHub Actions on every push and pull request
 ([`.github/workflows/build.yml`](.github/workflows/build.yml), Windows x64):
 debug + release host build, native shim/fixtures, `selftest`, the
-CLI/hardware/malware e2e suites, then a release zip. On public pushes the zip
+CLI/hardware/malware e2e suites, then a release zip. The hardware suite runs
+headless on CI (through `ghost run`, no window). On public pushes the zip
 receives a build-provenance attestation
 (`gh attestation verify ghost-sandbox-windows-x64.zip --repo ChrisGamer5013/ghost-sandbox`),
 and `v*` tags publish it as a GitHub release.
@@ -528,7 +529,8 @@ ghost_lab e2e malware-gui   # the same through the GUI
 - `e2e hw` publishes `profiles/default.toml`, injects the hardware probe, and asserts the spoofed
   values in **every** source from the coverage table above, then diffs them against an
   un-injected ground-truth run to prove host values were replaced — including hiding a Hyper-V
-  guest's hypervisor flag.
+  guest's hypervisor flag. On CI it runs headless (`GHOST_E2E_HEADLESS=1`): `ghost run` publishes
+  the profile instead of the GUI.
 - Fixtures live in `target\drmtest\`: `drm_probe.cpp` (anti-tamper calls), `hw_probe.cpp`
   (machine-readable `[hw] key=value` hardware report), `malware_sim.cpp` (benign behaviour
   simulator that logs what it believes happened), plus policy TOMLs and captured reports.

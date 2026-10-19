@@ -57,13 +57,27 @@ jobs:
       - name: Selftest (59 checks)
         run: .\target\release\ghost_lab.exe selftest
 
-      # The GUI suites (drm / sandbox / malware-gui) are local-only; the
-      # CLI, hardware and malware suites cover the instrumented engine.
+      # The GUI suites (drm / sandbox / malware-gui) are local-only. The
+      # hardware suite runs headless in CI (GHOST_E2E_HEADLESS drives the
+      # same profile/shim path through `ghost run` instead of the GUI).
       - name: End-to-end — CLI, hardware, malware
+        env:
+          GHOST_E2E_HEADLESS: "1"
         run: |
           .\target\release\ghost_lab.exe e2e cli
           .\target\release\ghost_lab.exe e2e hw
           .\target\release\ghost_lab.exe e2e malware
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: |
+            target/drmtest/*.log
+            target/drmtest/*.txt
+            ${{ runner.temp }}/ghost_sandbox_shim.log
+          if-no-files-found: ignore
 
       - name: Package release
         shell: pwsh

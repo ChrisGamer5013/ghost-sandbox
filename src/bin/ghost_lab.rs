@@ -1828,6 +1828,57 @@ fn e2e_hw() -> Check {
     let gt = read_text(&ground);
     c.check(gt.contains("probe.done"), "ground-truth probe completed");
 
+    // Headless hosts (CI) have no interactive desktop, so the GUI never
+    // creates its window or control pipe. `ghost run` publishes the same
+    // bundled profile before injecting, exercising the identical shim-side
+    // spoofing path without a window.
+    if std::env::var("GHOST_E2E_HEADLESS").as_deref() == Ok("1") {
+        let ghost = root().join("target").join("debug").join("ghost.exe");
+        c.check(ghost.is_file(), "ghost.exe built (cargo build)");
+        if !ghost.is_file() {
+            return c;
+        }
+        let cli_out = out.join("hw_cli_stdout.log");
+        let cli_err = out.join("hw_cli_stderr.log");
+        let report = out.join("hw_cli_report.json");
+        let status = Command::new(&ghost)
+            .current_dir(&out)
+            .args([
+                "run",
+                probe.to_str().unwrap(),
+                "--duration",
+                "60",
+                "--quiet",
+                "--out",
+                report.to_str().unwrap(),
+            ])
+            .stdout(Stdio::from(File::create(&cli_out).unwrap()))
+            .stderr(Stdio::from(File::create(&cli_err).unwrap()))
+            .status();
+        let ok = status.map(|s| s.success()).unwrap_or(false);
+        c.check(ok, "headless CLI run exited cleanly");
+        if !ok {
+            c.info(format!(
+                "stderr: {}",
+                read_text(&cli_err).lines().take(8).collect::<Vec<_>>().join(" | ")
+            ));
+        }
+        let mut po = String::new();
+        for _ in 0..80 {
+            po = read_text(&probe_out);
+            if po.contains("probe.done") {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(250));
+        }
+        c.check(po.contains("probe.done"), "injected probe completed");
+        if po.contains("probe.done") {
+            check_hw_profile(&mut c, &po, &gt, &profile);
+        }
+        kill_proc("hw_probe");
+        return c;
+    }
+
     // 2) GUI up (publishes the profile), then inject the probe.
     let child = match launch_gui(&[("GHOST_START_VIEW", "drm")], &gui_out, &gui_err) {
         Ok(ch) => ch,

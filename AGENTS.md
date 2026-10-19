@@ -248,7 +248,10 @@ README.md        features, coverage matrix, limitations, licence, disclaimer
 - GitHub Actions (`.github/workflows/build.yml`, `windows-latest`) builds
   debug + release, runs `selftest` and `e2e cli|hw|malware`, packages the
   release zip, attests build provenance on public pushes, and publishes a
-  GitHub release for `v*` tags. The GUI suites stay local-only.
+  GitHub release for `v*` tags. The GUI suites stay local-only; CI sets
+  `GHOST_E2E_HEADLESS=1` so the hardware suite drives the profile/shim path
+  through `ghost run` instead of a window. Failure logs are uploaded as the
+  `test-logs` artifact.
 - Shim diagnostics: `%TEMP%\ghost_sandbox_shim.log`.
 
 ## Automation / test environment variables

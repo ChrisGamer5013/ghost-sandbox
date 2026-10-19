@@ -21,20 +21,23 @@ use std::time::Duration;
 
 use crossbeam_channel::{bounded, Receiver, Sender};
 use winapi::shared::minwindef::{DWORD, LPVOID};
+use winapi::shared::sddl::ConvertSidToStringSidW;
 use winapi::um::errhandlingapi::GetLastError;
 use winapi::um::fileapi::{FlushFileBuffers, ReadFile, WriteFile};
 use winapi::um::handleapi::{CloseHandle, INVALID_HANDLE_VALUE};
 use winapi::um::namedpipeapi::{
     ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, PeekNamedPipe,
 };
+use winapi::um::processthreadsapi::{GetCurrentProcess, OpenProcessToken};
+use winapi::um::securitybaseapi::GetTokenInformation;
 use winapi::um::tlhelp32::{
     CreateToolhelp32Snapshot, Process32First, Process32Next, PROCESSENTRY32, TH32CS_SNAPPROCESS,
 };
 use winapi::um::winbase::{
-    GetNamedPipeClientProcessId, PIPE_ACCESS_DUPLEX, PIPE_READMODE_BYTE, PIPE_TYPE_BYTE,
+    GetNamedPipeClientProcessId, LocalFree, PIPE_ACCESS_DUPLEX, PIPE_READMODE_BYTE, PIPE_TYPE_BYTE,
     PIPE_UNLIMITED_INSTANCES, PIPE_WAIT,
 };
-use winapi::um::winnt::HANDLE;
+use winapi::um::winnt::{TokenUser, HANDLE, TOKEN_QUERY, TOKEN_USER};
 
 /// Pipe name shared with the shim (GHOST_SANDBOX_PIPE_NAME in trace_format.h).
 const PIPE_NAME: &str = "\\\\.\\pipe\\GhostSandbox";
@@ -244,6 +247,55 @@ pub struct PipeServer {
     _handle: Option<std::thread::JoinHandle<()>>,
 }
 
+/// The invoking user's SID as an SDDL string (`S-1-5-…`), or `None` if the
+/// token cannot be queried.
+///
+/// The pipe DACL cannot rely on the object-owner ACE alone: when the
+/// controller runs elevated, a named-pipe object's owner is
+/// BUILTIN\Administrators, and that group is deny-only in the restricted
+/// (LUA) token used for containment. The target would then be denied access
+/// to the controller's own pipe, so the shim could never connect. Naming the
+/// user explicitly keeps the channel reachable at every integrity level while
+/// still locking other users out.
+fn current_user_sid_string() -> Option<String> {
+    unsafe {
+        let mut token: HANDLE = std::ptr::null_mut();
+        if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) == 0 {
+            return None;
+        }
+        let mut len: u32 = 0;
+        GetTokenInformation(token, TokenUser, std::ptr::null_mut(), 0, &mut len);
+        if len == 0 {
+            CloseHandle(token);
+            return None;
+        }
+        let mut buf = vec![0u8; len as usize];
+        let ok = GetTokenInformation(
+            token,
+            TokenUser,
+            buf.as_mut_ptr() as *mut _,
+            len,
+            &mut len,
+        );
+        CloseHandle(token);
+        if ok == 0 {
+            return None;
+        }
+        let user = &*(buf.as_ptr() as *const TOKEN_USER);
+        let mut sid: *mut u16 = std::ptr::null_mut();
+        if ConvertSidToStringSidW(user.User.Sid, &mut sid) == 0 {
+            return None;
+        }
+        let mut n = 0usize;
+        while *sid.add(n) != 0 {
+            n += 1;
+        }
+        let text = String::from_utf16_lossy(std::slice::from_raw_parts(sid, n));
+        LocalFree(sid as *mut _);
+        Some(text)
+    }
+}
+
 impl PipeServer {
     /// Create the pipe server and start listening in a background thread.
     pub fn new() -> Self {
@@ -286,13 +338,19 @@ impl PipeServer {
 
         // The pipe must be reachable even from a confined target that runs
         // under a low-integrity token (malware analysis "untrusted" mode).
-        // The DACL grants the object owner (OW), SYSTEM and Administrators
-        // full access; the low mandatory label lifts the no-read-up block so
-        // same-user low-IL subjects may connect. Other users stay locked out.
-        let sddl: Vec<u16> = "D:(A;;GA;;;OW)(A;;GA;;;SY)(A;;GA;;;BA)S:(ML;;NW;;;LW)"
-            .encode_utf16()
-            .chain(std::iter::once(0))
-            .collect();
+        // The DACL grants the invoking user, the object owner (OW), SYSTEM and
+        // Administrators full access; naming the user explicitly matters when
+        // the controller is elevated (the pipe owner is then Administrators,
+        // which is deny-only in a LUA token). The low mandatory label lifts
+        // the no-read-up block so same-user low-IL subjects may connect. Other
+        // users stay locked out.
+        let mut sddl = String::from("D:(A;;GA;;;OW)(A;;GA;;;SY)(A;;GA;;;BA)");
+        match current_user_sid_string() {
+            Some(sid) => sddl.push_str(&format!("(A;;GA;;;{})", sid)),
+            None => tracing::warn!("could not resolve the current user SID for the pipe DACL"),
+        }
+        sddl.push_str("S:(ML;;NW;;;LW)");
+        let sddl: Vec<u16> = sddl.encode_utf16().chain(std::iter::once(0)).collect();
         let mut sd: winapi::um::winnt::PSECURITY_DESCRIPTOR = std::ptr::null_mut();
         let mut sa: winapi::um::minwinbase::SECURITY_ATTRIBUTES = unsafe { std::mem::zeroed() };
         let mut sa_ptr: *mut winapi::um::minwinbase::SECURITY_ATTRIBUTES = std::ptr::null_mut();
