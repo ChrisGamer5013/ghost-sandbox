@@ -31,6 +31,7 @@ build/test harness (`ghost_lab.exe`).
 - [Architecture](#architecture)
 - [Requirements](#requirements)
 - [Building](#building)
+- [Antivirus flags and verifying downloads](#antivirus-flags-and-verifying-downloads)
 - [Quick start](#quick-start)
 - [Hardware identity spoofing](#hardware-identity-spoofing)
 - [Sandbox policy — import / export control](#sandbox-policy--import--export-control)
@@ -197,6 +198,46 @@ Every push to `main` also publishes a release: the version in the root
 tagged `vX.Y.Z`, and released with the zip + `SHA256SUMS.txt`. To choose a
 number yourself, edit `VERSION` (a hand-edited `Cargo.toml` version or a
 manual workflow run with the `version` input works too).
+
+---
+
+## Antivirus flags and verifying downloads
+
+Ghost Sandbox is an analysis tool, so it deliberately uses techniques that
+malware also uses: it injects `sandbox_shim.dll` into processes, hooks
+Win32/NT calls inside the guest, restricts tokens and DACLs, and presents
+spoofed hardware identifiers to confined programs. Windows Defender,
+SmartScreen and third-party AVs may therefore flag the release binaries
+(`ghost.exe`, `sandbox_shim.dll`, …), warn that the publisher is unknown, or
+ask to submit them for inspection — for example Defender's "Microsoft
+Defender Antivirus would like to check the following files" prompt. These
+are false positives: the binaries contain no malware and only implement
+what this source tree builds. In a submission prompt, choose **Don't send**
+(or leave the file unchecked); if Defender quarantined `ghost.exe`, restore
+it from Protection history and verify the hash before running.
+
+Nothing has to be trusted blindly — verify the download first:
+
+1. **Check the SHA-256** against `SHA256SUMS.txt` from the same release:
+
+   ```powershell
+   Get-FileHash .\ghost-sandbox-windows-x64.zip -Algorithm SHA256
+   ```
+
+2. **Verify the build-provenance attestation** — with the GitHub CLI the
+   zip is checked against this repository's CI build record:
+
+   ```powershell
+   gh attestation verify ghost-sandbox-windows-x64.zip --repo ChrisGamer5013/ghost-sandbox
+   ```
+
+3. **Or [build it from source](#building)** — the commands in this README
+   produce the same binaries, and `ghost_lab selftest` exercises the hooks
+   before you run anything untrusted.
+
+Only add a local AV exclusion for the extracted folder if you knowingly
+accept the risk: the tool is analysis-only and never hides or installs real
+malware, but heuristics cannot know that from the outside.
 
 ---
 
