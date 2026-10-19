@@ -208,13 +208,27 @@ malware also uses: it injects `sandbox_shim.dll` into processes, hooks
 Win32/NT calls inside the guest, restricts tokens and DACLs, and presents
 spoofed hardware identifiers to confined programs. Windows Defender,
 SmartScreen and third-party AVs may therefore flag the release binaries
-(`ghost.exe`, `sandbox_shim.dll`, …), warn that the publisher is unknown, or
-ask to submit them for inspection — for example Defender's "Microsoft
-Defender Antivirus would like to check the following files" prompt. These
-are false positives: the binaries contain no malware and only implement
-what this source tree builds. In a submission prompt, choose **Don't send**
-(or leave the file unchecked); if Defender quarantined `ghost.exe`, restore
-it from Protection history and verify the hash before running.
+(`ghost.exe`, `ghost_sandbox.exe`, `sandbox_shim.dll`, …), warn that the
+publisher is unknown, or ask to submit them for inspection — for example
+Defender's "Microsoft Defender Antivirus would like to check the following
+files" prompt, or a heuristic verdict like `Trojan:Win32/Bearfoos.B!ml` on
+`ghost_sandbox.exe` (the `!ml` suffix marks a machine-learning
+classification, not a signature match). These are false positives: the
+binaries contain no malware and only implement what this source tree
+builds.
+
+If you would rather not trust the published binaries at all, don't: the
+complete source is in this repository — read it, audit it, and build your
+own from the [Building](#building) commands. The attestation below simply
+shows that the release zip came from this repository's CI, not from a third
+party.
+
+To keep a quarantined binary: add an exclusion for the extracted folder
+first (Virus & threat protection → Manage settings → Exclusions), then
+restore the file from Protection history (Actions → Restore/Allow), or
+re-extract the zip. In any submission prompt, choose **Don't send** (or
+leave the file unchecked). False-positive verdicts can also be sent to
+Microsoft for review (WDSI file submission, software-developer category).
 
 Nothing has to be trusted blindly — verify the download first:
 
