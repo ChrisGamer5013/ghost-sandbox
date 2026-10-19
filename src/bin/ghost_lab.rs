@@ -2481,7 +2481,52 @@ fn e2e_malware() -> Check {
         verdicts.iter().all(|v| v != "Allowed"),
         "nothing was allowed (default deny, no --approve-* flags)",
     );
-    c.check(ops.iter().all(|o| o["pending"].as_bool() == Some(false)), "no operation left pending");
+    let pending: Vec<String> = ops
+        .iter()
+        .filter(|o| o["pending"].as_bool() == Some(true))
+        .map(|o| {
+            format!(
+                "#{} {} {} api={} target={}",
+                o["op_id"].as_u64().unwrap_or(0),
+                o["category"].as_str().unwrap_or("?"),
+                o["action"].as_str().unwrap_or("?"),
+                o["api"].as_str().unwrap_or(""),
+                o["target"].as_str().unwrap_or("")
+            )
+        })
+        .collect();
+    c.check(
+        pending.is_empty(),
+        format!(
+            "no operation left pending ({})",
+            if pending.is_empty() {
+                "none".to_string()
+            } else {
+                pending.join("; ")
+            }
+        ),
+    );
+    if !pending.is_empty() {
+        let log = std::env::temp_dir().join("ghost_sandbox_shim.log");
+        let text = read_text(&log);
+        let tail: Vec<&str> = text
+            .lines()
+            .filter(|l| l.contains("[mw] emit"))
+            .rev()
+            .take(24)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect();
+        c.info(format!(
+            "shim emit tail: {}",
+            if tail.is_empty() {
+                "(empty)".to_string()
+            } else {
+                tail.join(" | ")
+            }
+        ));
+    }
     let counts = &rep["counts"];
     c.info(format!(
         "counters: shadowed={} faked={} blocked={} allowed={}",

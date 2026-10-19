@@ -68,6 +68,19 @@ jobs:
           .\target\release\ghost_lab.exe e2e hw
           .\target\release\ghost_lab.exe e2e malware
 
+      - name: Collect test logs on failure
+        if: failure()
+        shell: pwsh
+        run: |
+          $dst = "target\drmtest\_logs"
+          New-Item -ItemType Directory -Force $dst | Out-Null
+          foreach ($p in @(
+            (Join-Path $env:TEMP "ghost_sandbox_shim.log"),
+            (Join-Path $env:USERPROFILE "AppData\Local\Temp\ghost_sandbox_shim.log")
+          )) {
+            if (Test-Path $p) { Copy-Item $p $dst -Force }
+          }
+
       - name: Upload test logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -78,8 +91,7 @@ jobs:
             target/drmtest/*.txt
             target/drmtest/*.json
             target/drmtest/*.jsonl
-            ${{ runner.temp }}/ghost_sandbox_shim.log
-            C:/Users/*/AppData/Local/Temp/ghost_sandbox_shim.log
+            target/drmtest/_logs/*
           if-no-files-found: ignore
 
       - name: Package release
