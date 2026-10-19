@@ -229,6 +229,28 @@ public:
         DeleteCriticalSection(&sendLock);
     }
     
+    // Drain anything the background sender has not written yet. Called from
+    // DLL_PROCESS_DETACH: a final verdict emitted microseconds before the
+    // target exits would otherwise die in the ring when the process ends,
+    // leaving the controller with a row stuck at pending.
+    void Flush() {
+        if (hPipe == INVALID_HANDLE_VALUE) return;
+        
+        // Retire the sender thread first so this drain owns the pipe handle.
+        if (hSendThread) {
+            SetEvent(hStopEvent);
+            WaitForSingleObject(hSendThread, 2000);
+        }
+        
+        BYTE tempBuf[4096];
+        while (sendBuffer.HasData()) {
+            DWORD bytesRead = sendBuffer.Read(tempBuf, sizeof(tempBuf));
+            if (bytesRead == 0) break;
+            DWORD written = 0;
+            if (!WriteFile(hPipe, tempBuf, bytesRead, &written, NULL)) break;
+        }
+    }
+    
     BOOL Connect() {
         // Try to connect to the controller's named pipe
         hPipe = CreateFileA(

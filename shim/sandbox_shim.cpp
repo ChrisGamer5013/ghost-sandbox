@@ -1588,6 +1588,9 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
     else if (fdwReason == DLL_PROCESS_DETACH) {
         ShimLog("=== GHOST SANDBOX SHIM UNLOADING ===");
         
+        // Last-chance drain: final verdicts emitted just before exit are still
+        // in the send ring and would be lost when the process dies.
+        g_Pipe.Flush();
         g_Pipe.Destroy();
         
         if (g_LogFile) {
