@@ -258,7 +258,10 @@ README.md        features, coverage matrix, limitations, licence, disclaimer
   bump as `chore(release): vX.Y.Z [skip ci]`, tags `vX.Y.Z`, and publishes
   the release with the attested zip. To pick the number yourself, hand-edit
   `VERSION` (or the `version` field in `Cargo.toml`), or run the workflow
-  with the `version` input.
+  with the `version` input. The bump commit carries the literal skip marker;
+  never paste that marker into the message of a normal commit — GitHub
+  matches it anywhere in the message (subject **or body**) and silently
+  skips the push run.
 - Shim diagnostics: `%TEMP%\ghost_sandbox_shim.log`.
 
 ## Automation / test environment variables
